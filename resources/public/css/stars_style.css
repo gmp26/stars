@@ -1,0 +1,51 @@
+/* mystic CSS */
+body {
+    font-family: sans-serif;
+}
+
+.outlined {
+    fill: white;
+}
+
+.inp-default {
+    font-size: 26px;
+    background-color: white;
+    border: none;
+    width: 50px;
+    text-align: right;
+}
+.inp-default:focus {
+    outline: 1px solid #CCCCCC;
+}
+.btn-default {
+    font-size: 18px;
+    background-color: white;
+    border-radius: 5px;
+    width: 80px;
+}
+.btn-default:focus {
+    outline: 5px solid #CCCCCC;
+    outline-offset: 3px;
+}
+.btn-left {
+    border-bottom-right-radius: 0;
+    border-top-right-radius: 0;
+    border-right: none;
+}
+.btn-right {
+    border-bottom-left-radius: 0;
+    border-top-left-radius: 0;
+    border-left: 2px solid #CCCCCC;
+}
+
+.node-count {
+    zoom: 1.5;
+    float: right;
+    width: 100px;
+}
+
+.slider {
+    zoom: 1.5;
+    padding-right: 20px;
+    display: block;
+}
