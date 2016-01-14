@@ -31,10 +31,8 @@
              @core/svg-point
              (reset! core/svg-point (.createSVGPoint svg)))
         matrix (.inverse (.getScreenCTM svg))
-        [x y] (eventXY event)
-        ]
+        [x y] (eventXY event)]
     (aset pt "x" x)
     (aset pt "y" y)
-    (prn pt)
     (reset! core/svg-point (.matrixTransform pt matrix))
     [(.-x @core/svg-point) (.-y @core/svg-point)]))

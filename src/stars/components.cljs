@@ -17,13 +17,6 @@
 (defn deg [rad]
   (/ (* rad 180) (.-PI js/Math)))
 
-(defn coord-theta [[x y :as pt]]
-  (let [[ox oy :as origin] [(:x stars-o) (:y stars-o)]
-        theta1 (.acos js/Math (/ (- x ox) stars-r))
-        theta2 (.asin js/Math (/ (- y oy) stars-r))]
-    (prn "thetas = " (deg theta1) "," (deg theta2))
-    ))
-
 (defn i->theta [n i]
   (/ (* 2 Math.PI i) n))
 
@@ -36,13 +29,67 @@
           (< x (+ at width)) (/ (- x at) width)
           :else 1)))
 
+(defn handle-start [x y event]
+  (prn "dot start")
+  (swap! core/model assoc :dragging true)
+  (swap! core/drag-chord #(merge core/dragger (assoc % :x1 x :y1 y :x2 x :y2 y))))
+
+(defn handle-move [event]
+  (when (:dragging @core/model)
+    (prn "move")
+    (when-let [svg (core/el "svg-container")]
+      (let [[x2 y2] (events/mouse->svg svg event)]
+        (swap! core/drag-chord assoc :x2 x2 :y2 y2)))))
+
+(defn handle-dot-out [event]
+  (prn "dot-out"))
+
+(defn handle-out [event]
+  (prn "out"))
+
+(defn xy->theta [x y]
+  (let [angle (.atan2 js/Math y x)]
+    (if (pos? angle) angle (+ (* 2 (.-PI js/Math)) angle)))
+  )
+
+(defn closest-dot [x y]
+  (let [angle (xy->theta x y)
+        n (:stars-n @core/model)
+        sector (apply min-key
+                #(.abs js/Math (- (i->theta n %) angle))
+                (range n))
+        t (i->theta n sector)
+        ]
+    [(dot-coord :x t) (dot-coord :y t)]
+    ))
+
+(defn handle-end [x1 y1 event]
+  (let [chord @core/drag-chord
+        x (:x2 chord)
+        y (:y2 chord)
+        theta (xy->theta x y)
+        [x2 y2] (closest-dot x y)
+        ]
+    (swap! core/model assoc :dragging false)
+    (swap! core/drag-chord assoc :x2 x2 :y2 y2))
+  )
+
+(defn svg-event-coords [svg event]
+  (events/mouse->svg svg event))
+
 (rum/defc dot [theta]
-  [:circle {:style {:cursor "pointer"}
-            :stroke "#ffffff" :stoke-width 20 :fill "#CCCCCC" :r 8
-            :cx (dot-coord :x theta)
-            :cy (dot-coord :y theta)
-            :on-mouse-down #(if-let [svg (core/el "svg-container")]
-                              (prn (coord-theta (events/mouse->svg svg %)) (deg theta)))}])
+  (let [x (dot-coord :x theta)
+        y (dot-coord :y theta)]
+    [:circle {:style {:cursor "pointer"}
+              :stroke "#ffffff" :stoke-width 20 :fill "#CCCCCC" :r 8
+              :cx x
+              :cy y
+              :on-mouse-down #(handle-start x y %)
+              :on-touch-start #(handle-start x y %)
+              :on-mouse-out handle-out
+              :on-mouse-up #(handle-end x y %)
+              :on-touch-end #(handle-end x y %)
+              }]))
 
 (rum/defc n-slider < rum/static [model]
   [:input {:type "range" :value (:stars-n model) :min min-nodes :max max-nodes
@@ -78,14 +125,21 @@
             :marker-end (if (< t 1) "url(#arrow)" "none")
             }]))
 
+(rum/defc drag-line < rum/reactive []
+  [:line (rum/react core/drag-chord)])
+
 (rum/defc chords < rum/reactive []
   [:g])
 
-
-(rum/defc stars-rose < rum/reactive []
+(rum/defc star < rum/reactive []
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
    [:svg {:id "svg-container"
-          :view-box "0 0 400 400"}
+          :view-box "0 0 400 400"
+          :on-mouse-move handle-move
+          :on-touch-move handle-move
+          :on-mouse-up handle-end
+          :on-touch-end handle-end
+          }
     [:defs
      [:marker {:id "arrow"
                :view-box "-0.5 -0.5 1 1"
@@ -95,13 +149,10 @@
      [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r 190}]
      (dots-on-circle ((rum/react core/model) :stars-n))
      (chords)
-     ]]])
-
+     (drag-line)]]])
 
 (rum/defc stars []
   [:div
    (count-input)
    [:div {:style {:clear "both"}}
-    (stars-rose)]
-]
-  )
+    (star)]])
