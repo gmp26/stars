@@ -5,11 +5,21 @@
    [stars.events :as events]
    ))
 
+;;;
+;; constants
+;;;
 (def min-nodes 2)
 (def max-nodes 16)
-(def stars-r 190)
+(def stars-r 180)
 (def stars-o {:x 200 :y 200})
 (def t-steps 100)
+(def pi (.-PI js/Math))
+(def two-pi (* 2 pi))
+
+;;;
+;; utilities
+;;;
+(defn mean [a b] (/ (+ a b) 2))
 
 (defn dot-coord [key theta]
   (+ (key stars-o) (* stars-r ((if (= key :x) Math.cos Math.sin) theta))))
@@ -23,23 +33,48 @@
 (defn thetas [n]
   (map #(i->theta n %) (range n)))
 
+(defn xy->theta [x y]
+  (let [angle (.atan2 js/Math (- y (:y stars-o)) (- x (:x stars-o)))]
+    (if (pos? angle) angle (+ two-pi angle)))
+  )
+
+;; TODO
+(defn closest-sector [x y]
+  (let [angle (xy->theta x y)
+        n (:stars-n @core/model)]
+    (apply min-key
+           #(let [diff (.abs js/Math (- (i->theta n %) angle))]
+              (if (> diff pi) (- two-pi diff) diff))
+           (range n))))
+
+(defn closest-dot [x y]
+  (let [t (i->theta (:stars-n @core/model) (closest-sector x y))]
+    [(dot-coord :x t) (dot-coord :y t)]))
+
 (defn ramp [at width x]
   (let [a (+ at width)]
     (cond (< x at) 0
           (< x (+ at width)) (/ (- x at) width)
           :else 1)))
 
+;;;
+;; event handlers
+;;;
 (defn handle-start [x y event]
   (prn "dot start")
   (swap! core/model assoc :dragging true)
-  (swap! core/drag-chord #(merge core/dragger (assoc % :x1 x :y1 y :x2 x :y2 y))))
+  (swap! core/drag-chord assoc
+         :start (closest-sector x y)
+         :spec (merge core/dragger {:x1 x :y1 y :x2 x :y2 y})))
 
 (defn handle-move [event]
   (when (:dragging @core/model)
     (prn "move")
     (when-let [svg (core/el "svg-container")]
       (let [[x2 y2] (events/mouse->svg svg event)]
-        (swap! core/drag-chord assoc :x2 x2 :y2 y2)))))
+        (swap! core/drag-chord #(assoc %
+                                       :spec (assoc (:spec %) :x2 x2 :y2 y2)
+                                       :end (closest-sector x2 y2)))))))
 
 (defn handle-dot-out [event]
   (prn "dot-out"))
@@ -47,48 +82,24 @@
 (defn handle-out [event]
   (prn "out"))
 
-(defn xy->theta [x y]
-  (let [angle (.atan2 js/Math y x)]
-    (if (pos? angle) angle (+ (* 2 (.-PI js/Math)) angle)))
-  )
+(defn handle-end [event]
+  (swap! core/model assoc :dragging false :t 0))
 
-(defn closest-dot [x y]
-  (let [angle (xy->theta x y)
-        n (:stars-n @core/model)
-        sector (apply min-key
-                #(.abs js/Math (- (i->theta n %) angle))
-                (range n))
-        t (i->theta n sector)
-        ]
-    [(dot-coord :x t) (dot-coord :y t)]
-    ))
-
-(defn handle-end [x1 y1 event]
-  (let [chord @core/drag-chord
-        x (:x2 chord)
-        y (:y2 chord)
-        theta (xy->theta x y)
-        [x2 y2] (closest-dot x y)
-        ]
-    (swap! core/model assoc :dragging false)
-    (swap! core/drag-chord assoc :x2 x2 :y2 y2))
-  )
-
-(defn svg-event-coords [svg event]
-  (events/mouse->svg svg event))
-
+;;;
+;; component renders
+;;;
 (rum/defc dot [theta]
   (let [x (dot-coord :x theta)
         y (dot-coord :y theta)]
     [:circle {:style {:cursor "pointer"}
-              :stroke "#ffffff" :stoke-width 20 :fill "#CCCCCC" :r 8
+              :stroke "#ffffff" :stroke-width 3 :fill "#CCCCCC" :r 20
               :cx x
               :cy y
               :on-mouse-down #(handle-start x y %)
               :on-touch-start #(handle-start x y %)
               :on-mouse-out handle-out
-              :on-mouse-up #(handle-end x y %)
-              :on-touch-end #(handle-end x y %)
+              :on-mouse-up handle-end
+              :on-touch-end handle-end
               }]))
 
 (rum/defc n-slider < rum/static [model]
@@ -110,8 +121,6 @@
 (rum/defc dots-on-circle [stars-n]
   [:g  (map-indexed  #(rum/with-key (dot %2) %1) (thetas stars-n))])
 
-(defn mean [a b] (/ (+ a b) 2))
-
 (rum/defc chord [theta1 theta2 t]
   (let [x2 (dot-coord :x theta2)
         y2 (dot-coord :y theta2)]
@@ -125,13 +134,16 @@
             :marker-end (if (< t 1) "url(#arrow)" "none")
             }]))
 
+; TODO! merge in dragger here so it's not in drag-core state?
 (rum/defc drag-line < rum/reactive []
-  [:line (rum/react core/drag-chord)])
+  [:line (merge  {:style {:cursor "pointer"
+                          :pointer-events "none"}}
+                 (:spec (rum/react core/drag-chord)))])
 
-(rum/defc chords < rum/reactive []
+(rum/defc chords < rum/static [m]
   [:g])
 
-(rum/defc star < rum/reactive []
+(rum/defc star < rum/static [m]
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
    [:svg {:id "svg-container"
           :view-box "0 0 400 400"
@@ -146,13 +158,15 @@
                }
       [:circle {:cx 0 :cy 0 :r 0.3 :fill "black"}]]]
     [:g
-     [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r 190}]
-     (dots-on-circle ((rum/react core/model) :stars-n))
-     (chords)
-     (drag-line)]]])
+     [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
+     (dots-on-circle (:stars-n m))
+     (if (:dragging m) (drag-line) (chords m))
+     ]]])
 
-(rum/defc stars []
+(rum/defc stars < rum/reactive []
   [:div
    (count-input)
    [:div {:style {:clear "both"}}
-    (star)]])
+    (star (rum/react core/model))
+    [:p (str (rum/react core/drag-chord))]
+    [:p (str (rum/react core/model))]]])
