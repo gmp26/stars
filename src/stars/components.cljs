@@ -97,6 +97,8 @@
               :cy y
               :on-mouse-down #(handle-start x y %)
               :on-touch-start #(handle-start x y %)
+              :on-mouse-move handle-move
+              :on-touch-move handle-move
               :on-mouse-out handle-out
               :on-mouse-up handle-end
               :on-touch-end handle-end
