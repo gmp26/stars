@@ -19,7 +19,16 @@
 ;;;
 ;; utilities
 ;;;
+
 (defn mean [a b] (/ (+ a b) 2))
+
+(defn gcd [a b]
+  (if (zero? b)
+    a
+    (recur b (mod a b))))
+
+(defn visit [n start end]
+  )
 
 (defn dot-coord [key theta]
   (+ (key stars-o) (* stars-r ((if (= key :x) Math.cos Math.sin) theta))))
@@ -56,6 +65,12 @@
     (cond (< x at) 0
           (< x (+ at width)) (/ (- x at) width)
           :else 1)))
+;;;
+;; timer events
+;;;
+
+
+
 
 ;;;
 ;; event handlers
@@ -83,7 +98,9 @@
   (prn "out"))
 
 (defn handle-end [event]
-  (swap! core/model assoc :dragging false :t 0))
+  (prn "end")
+  (swap! core/model assoc :dragging false :clock [0 0])
+  (let [timer core/timer] (.stop timer) (.start timer)))
 
 ;;;
 ;; component renders
@@ -123,16 +140,20 @@
 (rum/defc dots-on-circle [stars-n]
   [:g  (map-indexed  #(rum/with-key (dot %2) %1) (thetas stars-n))])
 
-(rum/defc chord [theta1 theta2 t]
-  (let [x2 (dot-coord :x theta2)
+(rum/defc chord [sector1 sector2 t]
+  (let [theta1 (i->theta (:stars-n @core/model) sector1)
+        theta2 (i->theta (:stars-n @core/model) sector2)
+        x1 (dot-coord :x theta1)
+        y1 (dot-coord :y theta1)
+        x2 (dot-coord :x theta2)
         y2 (dot-coord :y theta2)]
-
-    [:line {:x1 (dot-coord :x theta1)
-            :y1 (dot-coord :y theta1)
-            :x2 (+ (* (dot-coord :x theta1) (- 1 t)) (* x2 t))
-            :y2 (+ (* (dot-coord :y theta1) (- 1 t)) (* y2 t))
-            :stroke "rgba(0,128,255,0.3)" ;"#08f"
-            :stroke-width 2
+    [:line {:x1 x1
+            :y1 y1
+            :x2 (+ (* x1 (- 1 t)) (* x2 t))
+            :y2 (+ (* y1 (- 1 t)) (* y2 t))
+            :stroke-linecap "round"
+            :stroke "rgba(0,128,128,1)" ;"#08f"
+            :stroke-width 10
             :marker-end (if (< t 1) "url(#arrow)" "none")
             }]))
 
@@ -142,10 +163,25 @@
                           :pointer-events "none"}}
                  (:spec (rum/react core/drag-chord)))])
 
-(rum/defc chords < rum/static [m]
-  [:g])
+(defn step [m dc]
+  (mod (- (:start dc) (:end dc)) (:stars-n m)))
 
-(rum/defc star < rum/static [m]
+(defn addm [a b modulus]
+  (mod (+ a b) modulus))
+
+(rum/defc chords < rum/static [m dc]
+  (let [t (/ (second (:clock m)) 500)]
+    [:g.chord
+     (map-indexed (fn [idx sector]
+                    (chord
+                     (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
+                     (addm (:start dc) sector (:stars-n m))
+                     (ramp idx 1 t)))
+                  (range  (:stars-n m) 0 (- (step m dc))))
+                                        ;(chord (:start dc) (:end dc) 0.5)
+     ]))
+
+(rum/defc star < rum/static [m dc]
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
    [:svg {:id "svg-container"
           :view-box "0 0 400 400"
@@ -162,13 +198,13 @@
     [:g
      [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
      (dots-on-circle (:stars-n m))
-     (if (:dragging m) (drag-line) (chords m))
+     (if (:dragging m) (drag-line) (chords m dc))
      ]]])
 
 (rum/defc stars < rum/reactive []
   [:div
    (count-input)
    [:div {:style {:clear "both"}}
-    (star (rum/react core/model))
+    (star (rum/react core/model) (rum/react core/drag-chord))
     [:p (str (rum/react core/drag-chord))]
     [:p (str (rum/react core/model))]]])
