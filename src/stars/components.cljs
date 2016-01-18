@@ -27,9 +27,6 @@
     a
     (recur b (mod a b))))
 
-(defn visit [n start end]
-  (prn "visit"))
-
 (defn dot-coord [key theta]
   (+ (key stars-o) (* stars-r ((if (= key :x) Math.cos Math.sin) theta))))
 
@@ -157,7 +154,7 @@
                  (:spec (rum/react core/drag-chord)))])
 
 (defn step [m dc]
-  (mod (- (:start dc) (:end dc)) (:stars-n m)))
+  (mod (- (:end dc) (:start dc)) (:stars-n m)))
 
 (defn addm [a b modulus]
   (mod (+ a b) modulus))
@@ -202,3 +199,12 @@
     (star (rum/react core/model) (rum/react core/drag-chord))
     [:p (str (rum/react core/drag-chord))]
     [:p (str (rum/react core/model))]]])
+
+(defn visit []
+  (let [m @core/model
+        dc @core/drag-chord
+        n (:stars-n m)
+        s (:start dc)
+        e (:end dc)
+        st (step m dc)]
+    (prn "visit" n s e st)))
