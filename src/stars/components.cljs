@@ -28,7 +28,7 @@
     (recur b (mod a b))))
 
 (defn visit [n start end]
-  )
+  (prn "visit"))
 
 (defn dot-coord [key theta]
   (+ (key stars-o) (* stars-r ((if (= key :x) Math.cos Math.sin) theta))))
@@ -65,13 +65,6 @@
     (cond (< x at) 0
           (< x (+ at width)) (/ (- x at) width)
           :else 1)))
-;;;
-;; timer events
-;;;
-
-
-
-
 ;;;
 ;; event handlers
 ;;;
@@ -171,14 +164,14 @@
 
 (rum/defc chords < rum/static [m dc]
   (let [t (/ (second (:clock m)) 500)]
-    [:g.chord
-     (map-indexed (fn [idx sector]
+    [:g
+     #_(map-indexed (fn [idx sector]
                     (chord
                      (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
                      (addm (:start dc) sector (:stars-n m))
                      (ramp idx 1 t)))
                   (range  (:stars-n m) 0 (- (step m dc))))
-                                        ;(chord (:start dc) (:end dc) 0.5)
+     (chord (:start dc) (:end dc) 0.5)
      ]))
 
 (rum/defc star < rum/static [m dc]
@@ -198,7 +191,8 @@
     [:g
      [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
      (dots-on-circle (:stars-n m))
-     (if (:dragging m) (drag-line) (chords m dc))
+     (if (:dragging m) (drag-line) (chords m dc)
+         )
      ]]])
 
 (rum/defc stars < rum/reactive []
