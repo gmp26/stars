@@ -156,22 +156,40 @@
 (defn step [m dc]
   (mod (- (:end dc) (:start dc)) (:stars-n m)))
 
-(defn addm [a b modulus]
-  (mod (+ a b) modulus))
+(defn lines-to-draw [n start end step]
+  (let [steps (/ n (gcd n step))
+        indices (range steps)]
+    (map #(let [a (mod (+ start (* % step)) n)
+                b (mod (+ a step) n)]
+            [a b]) indices)))
 
-(rum/defc chords < rum/static [m dc]
-  (let [t (/ (second (:clock m)) 500)]
-    [:g
-     #_(map-indexed (fn [idx sector]
+(defn visit []
+  (let [m @core/model
+        dc @core/drag-chord
+        n (:stars-n m)
+        s (:start dc)
+        e (:end dc)
+        st (step m dc)]
+    (lines-to-draw n s e st)))
+
+(rum/defc chords [m dc]
+  ;let [t (/ (second (:clock m)) 500)]
+  [:g
+   (map-indexed
+    #(prn [% %2])
+    (lines-to-draw (:stars-n m) (:start dc) (:end dc) (step m dc)))
+
+
+   #_(map-indexed (fn [idx sector]
                     (chord
                      (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
                      (addm (:start dc) sector (:stars-n m))
                      (ramp idx 1 t)))
                   (range  (:stars-n m) 0 (- (step m dc))))
-     (chord (:start dc) (:end dc) 0.5)
-     ]))
+   ;(chord (:start dc) (:end dc) 0.5)
+   ])
 
-(rum/defc star < rum/static [m dc]
+(rum/defc star [m dc]
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
    [:svg {:id "svg-container"
           :view-box "0 0 400 400"
@@ -196,15 +214,10 @@
   [:div
    (count-input)
    [:div {:style {:clear "both"}}
-    (star (rum/react core/model) (rum/react core/drag-chord))
-    [:p (str (rum/react core/drag-chord))]
-    [:p (str (rum/react core/model))]]])
-
-(defn visit []
-  (let [m @core/model
-        dc @core/drag-chord
-        n (:stars-n m)
-        s (:start dc)
-        e (:end dc)
-        st (step m dc)]
-    (prn "visit" n s e st)))
+    (let [t (/ second (:clock (rum/react core/model)) 500)
+          n (:n-stars (rum/react core/model))
+          ]
+      (when (< t n)
+        (star (rum/react core/model) (rum/react core/drag-chord)))
+      [:p (str (rum/react core/drag-chord))]
+      [:p (str (rum/react core/model))])]])

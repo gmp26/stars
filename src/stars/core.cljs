@@ -32,7 +32,7 @@
     timer)
   )
 
-(defonce timer (create-timer 5))
+(defonce timer (create-timer 50))
 
 (defn el [id] (js/document.getElementById id))
 
