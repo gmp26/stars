@@ -27,7 +27,7 @@
     (.listen timer
              (.-TICK goog.Timer)
              (fn [] (let [now (goog.now)]
-                     (swap! model update
+                     #_(swap! model update
                             :clock #(let [[t0 t] %] (if (zero? t0) [now 0] [t0 (- now t0)]))))))
     timer)
   )

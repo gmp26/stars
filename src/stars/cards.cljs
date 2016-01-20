@@ -19,3 +19,6 @@
 
 (defcard stars
   (comp/stars))
+
+#_(defcard timer
+  (comp/timer))

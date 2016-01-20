@@ -8,7 +8,7 @@
 ;;;
 ;; constants
 ;;;
-(def min-nodes 2)
+(def min-nodes 1)
 (def max-nodes 16)
 (def stars-r 180)
 (def stars-o {:x 200 :y 200})
@@ -115,7 +115,7 @@
   [:input {:type "range" :value (:stars-n model) :min min-nodes :max max-nodes
            :style {:width "100%"}
            :on-change #(swap! core/model  assoc
-                              :stars-n (-> % .-target .-value))}])
+                              :stars-n (.parseInt js/window (-> % .-target .-value)))}])
 
 (rum/defc count-input < rum/reactive []
   [:span.node-count
@@ -123,15 +123,63 @@
     [:input.inp-default
      {:type "number"
       :min min-nodes :max max-nodes :value (:stars-n (rum/react core/model))
-      :on-change #(swap! core/model assoc :stars-n (.parseInt js/Number (-> % .-target .-value)))}]
+      :on-change #(swap! core/model assoc :stars-n (.parseInt js/window (-> % .-target .-value)))}]
     "points"]
    (n-slider (rum/react core/model))])
 
 (rum/defc dots-on-circle [stars-n]
   [:g  (map-indexed  #(rum/with-key (dot %2) %1) (thetas stars-n))])
 
-(rum/defc chord [sector1 sector2 t]
-  (let [theta1 (i->theta (:stars-n @core/model) sector1)
+(def increments 10)
+
+(defn slow-local
+  "Adds an atom to component’s state that can be used as local state.
+   Atom is stored under key `:rum/local`.
+   Component will be automatically re-rendered if atom’s value changes"
+  [initial & [key]]
+  (let [key (or key :rum/local)]
+    { :transfer-state
+     (fn [old-state state]
+       (merge state (select-keys old-state [key ::interval])))
+      :will-mount
+      (fn [state]
+        (let [local-state (atom initial)
+              component   (:rum/react-component state)]
+          (add-watch local-state key
+            (fn [_ _ _ _]
+              (rum/request-render component)))
+          (assoc state key local-state))) }))
+
+
+(def slow-draw {:did-mount (fn [state]
+                             (let [[sector1 sector2 index] (:rum/args state)
+                                   comp      (:rum/react-component state)
+                                   callback (fn [event]
+                                              (.log js/console @(:rum/local state))
+                                              (swap! (:rum/local state)
+                                                     #(if (>= % increments)
+                                                        (do
+                                                          (.log js/console state)
+                                                          (js/clearInterval (::interval state))
+                                                          increments)
+                                                        (inc %))))
+                                   interval  (js/setInterval callback 1000)
+                                   ]
+                               (assoc state ::interval interval)
+                             )
+                             )
+                :transfer-state (fn [old-state state]
+                                  (merge state (select-keys old-state [::interval])))
+                :will-unmount (fn [state]
+                                (let [[sector1 sector2 index] (:rum/args state)]
+                                  (js/clearInterval (::interval state))
+                                  state))
+                })
+
+
+(rum/defcs chord < (slow-local 0) slow-draw [state sector1 sector2 index]
+  (let [t (/ @(:rum/local state) increments)
+        theta1 (i->theta (:stars-n @core/model) sector1)
         theta2 (i->theta (:stars-n @core/model) sector2)
         x1 (dot-coord :x theta1)
         y1 (dot-coord :y theta1)
@@ -144,7 +192,7 @@
             :stroke-linecap "round"
             :stroke "rgba(0,128,128,1)" ;"#08f"
             :stroke-width 10
-            :marker-end (if (< t 1) "url(#arrow)" "none")
+            :marker-end "none" ;(if (< t 1) "url(#arrow)" "none")
             }]))
 
 ; TODO! merge in dragger here so it's not in drag-core state?
@@ -153,41 +201,51 @@
                           :pointer-events "none"}}
                  (:spec (rum/react core/drag-chord)))])
 
-(defn step [m dc]
+#_(defn step [m dc]
   (mod (- (:end dc) (:start dc)) (:stars-n m)))
 
-(defn lines-to-draw [n start end step]
-  (let [steps (/ n (gcd n step))
+(defn step-length [n start end]
+  "count step-length forward around circle of size n given a step start and end"
+  (mod (- end start) n))
+
+(defn lines-to-draw [n start end]
+  (let [step-len (step-length n start end)
+        steps (/ n (gcd n step-len))
         indices (range steps)]
-    (map #(let [a (mod (+ start (* % step)) n)
-                b (mod (+ a step) n)]
+    (map #(let [a (mod (+ start (* % step-len)) n)
+                b (mod (+ a step-len) n)]
             [a b]) indices)))
 
 (defn visit []
   (let [m @core/model
         dc @core/drag-chord
         n (:stars-n m)
-        s (:start dc)
-        e (:end dc)
-        st (step m dc)]
-    (lines-to-draw n s e st)))
+        start (:start dc)
+        end (:end dc)
+        ]
+    (lines-to-draw n start end)))
 
 (rum/defc chords [m dc]
   ;let [t (/ (second (:clock m)) 500)]
-  [:g
-   (map-indexed
-    #(prn [% %2])
-    (lines-to-draw (:stars-n m) (:start dc) (:end dc) (step m dc)))
+  (let [n (:stars-n m)
+        start (:start dc)
+        end (:end dc)
+        step-len (step-length n start end)]
+    [:g
+     (map-indexed
+      #(let [[start end] %2]
+        (prn [start end])
+         (chord start end % 1))
+      (lines-to-draw n start end))
 
-
-   #_(map-indexed (fn [idx sector]
-                    (chord
-                     (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
-                     (addm (:start dc) sector (:stars-n m))
-                     (ramp idx 1 t)))
-                  (range  (:stars-n m) 0 (- (step m dc))))
-   ;(chord (:start dc) (:end dc) 0.5)
-   ])
+     #_(map-indexed (fn [idx sector]
+                      (chord
+                       (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
+                       (addm (:start dc) sector (:stars-n m))
+                       (ramp idx 1 t)))
+                    (range  (:stars-n m) 0 (- (step m dc))))
+                                        ;(chord (:start dc) (:end dc) 0.5)
+     ]))
 
 (rum/defc star [m dc]
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
@@ -214,10 +272,34 @@
   [:div
    (count-input)
    [:div {:style {:clear "both"}}
-    (let [t (/ second (:clock (rum/react core/model)) 500)
-          n (:n-stars (rum/react core/model))
-          ]
-      (when (< t n)
-        (star (rum/react core/model) (rum/react core/drag-chord)))
-      [:p (str (rum/react core/drag-chord))]
-      [:p (str (rum/react core/model))])]])
+    (star (rum/react core/model) (rum/react core/drag-chord))
+    [:p (str (rum/react core/drag-chord))]
+    [:p (str (rum/react core/model))]]])
+
+(defn unmount-star [])
+
+
+(def goo nil
+  (let [sym-a (rum/render->mixin (fn ([hey] (do (js/React.createElement "div" nil)))))
+        class-b (rum/build-class (concat [sym-a] [slow-draw]) "goo")
+        ctor-c (fn [& args]
+                 (let [state-d (rum/args->state args)]
+                   (rum/element class-b state-d nil)))]
+    (with-meta ctor-c {:rum/class class-b})))
+
+;;;;;;;;;;;;;
+
+(def autorefresh-mixin {
+  :did-mount (fn [state]
+               (let [comp      (:rum/react-component state)
+                     callback #(rum/request-render comp)
+                     interval  (js/setInterval callback 1000)]
+                 (assoc state ::interval interval)
+                 ))
+  :transfer-state (fn [old-state state]
+                    (merge state (select-keys old-state [::interval])))
+  :will-unmount (fn [state]
+                  (js/clearInterval (::interval state)))})
+
+(rum/defc timer < autorefresh-mixin []
+  [:div.timer (.toISOString (js/Date.))])
