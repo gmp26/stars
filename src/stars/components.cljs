@@ -89,7 +89,7 @@
 
 (defn handle-end [event]
   (prn "end")
-  (swap! core/model assoc :dragging false :clock [0 0])
+  (swap! core/model assoc :dragging false)
   )
 
 ;;;
@@ -260,7 +260,7 @@
      ]]])
 
 (rum/defc stars < rum/reactive []
-  [:div
+  [:div {:style {:max-width "600px"}}
    (count-input)
    [:div {:style {:clear "both"}}
     (star (rum/react core/model) (rum/react core/drag-chord))
