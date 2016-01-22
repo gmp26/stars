@@ -11,14 +11,5 @@
 
 (enable-console-print!)
 
-#_(defcard basic-stars-rose
-  (comp/basic-stars-rose core/model))
-
-#_(defcard four-draw-methods
-  (comp/side-by-side core/model))
-
 (defcard stars
   (comp/stars))
-
-#_(defcard timer
-  (comp/timer))

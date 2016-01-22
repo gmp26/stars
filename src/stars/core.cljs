@@ -22,18 +22,6 @@
               :stroke-width 10
               :stroke-linecap "round"})
 
-(defn create-timer [speed]
-  (let [timer (goog.Timer. speed)]
-    (.listen timer
-             (.-TICK goog.Timer)
-             (fn [] (let [now (goog.now)]
-                     #_(swap! model update
-                            :clock #(let [[t0 t] %] (if (zero? t0) [now 0] [t0 (- now t0)]))))))
-    timer)
-  )
-
-(defonce timer (create-timer 50))
-
 (defn el [id] (js/document.getElementById id))
 
 ;; main entry, not yet

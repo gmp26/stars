@@ -90,7 +90,7 @@
 (defn handle-end [event]
   (prn "end")
   (swap! core/model assoc :dragging false :clock [0 0])
-  (let [timer core/timer] (.stop timer) (.start timer)))
+  )
 
 ;;;
 ;; component renders
@@ -177,9 +177,8 @@
                 })
 
 
-(rum/defcs chord < (slow-local 0) slow-draw [state sector1 sector2 index]
-  (let [t (/ @(:rum/local state) increments)
-        theta1 (i->theta (:stars-n @core/model) sector1)
+(rum/defc chord [sector1 sector2 index t]
+  (let [theta1 (i->theta (:stars-n @core/model) sector1)
         theta2 (i->theta (:stars-n @core/model) sector2)
         x1 (dot-coord :x theta1)
         y1 (dot-coord :y theta1)
@@ -237,14 +236,6 @@
         (prn [start end])
          (chord start end % 1))
       (lines-to-draw n start end))
-
-     #_(map-indexed (fn [idx sector]
-                      (chord
-                       (mod (+ (:start dc) sector (step m dc)) (:stars-n m) )
-                       (addm (:start dc) sector (:stars-n m))
-                       (ramp idx 1 t)))
-                    (range  (:stars-n m) 0 (- (step m dc))))
-                                        ;(chord (:start dc) (:end dc) 0.5)
      ]))
 
 (rum/defc star [m dc]
@@ -275,31 +266,3 @@
     (star (rum/react core/model) (rum/react core/drag-chord))
     [:p (str (rum/react core/drag-chord))]
     [:p (str (rum/react core/model))]]])
-
-(defn unmount-star [])
-
-
-(def goo nil
-  (let [sym-a (rum/render->mixin (fn ([hey] (do (js/React.createElement "div" nil)))))
-        class-b (rum/build-class (concat [sym-a] [slow-draw]) "goo")
-        ctor-c (fn [& args]
-                 (let [state-d (rum/args->state args)]
-                   (rum/element class-b state-d nil)))]
-    (with-meta ctor-c {:rum/class class-b})))
-
-;;;;;;;;;;;;;
-
-(def autorefresh-mixin {
-  :did-mount (fn [state]
-               (let [comp      (:rum/react-component state)
-                     callback #(rum/request-render comp)
-                     interval  (js/setInterval callback 1000)]
-                 (assoc state ::interval interval)
-                 ))
-  :transfer-state (fn [old-state state]
-                    (merge state (select-keys old-state [::interval])))
-  :will-unmount (fn [state]
-                  (js/clearInterval (::interval state)))})
-
-(rum/defc timer < autorefresh-mixin []
-  [:div.timer (.toISOString (js/Date.))])
