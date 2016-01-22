@@ -130,54 +130,6 @@
 (rum/defc dots-on-circle [stars-n]
   [:g  (map-indexed  #(rum/with-key (dot %2) %1) (thetas stars-n))])
 
-(def increments 10)
-
-(defn slow-local
-  "Adds an atom to component’s state that can be used as local state.
-   Atom is stored under key `:rum/local`.
-   Component will be automatically re-rendered if atom’s value changes"
-  [initial & [key]]
-  (let [key (or key :rum/local)]
-    { :transfer-state
-     (fn [old-state state]
-       (merge state (select-keys old-state [key ::interval])))
-      :will-mount
-      (fn [state]
-        (let [local-state (atom initial)
-              component   (:rum/react-component state)]
-          (add-watch local-state key
-            (fn [_ _ _ _]
-              (rum/request-render component)))
-          (assoc state key local-state))) }))
-
-
-(def slow-draw {:did-mount (fn [state]
-                             (let [[sector1 sector2 index] (:rum/args state)
-                                   comp      (:rum/react-component state)
-                                   callback (fn [event]
-                                              (.log js/console @(:rum/local state))
-                                              (swap! (:rum/local state)
-                                                     #(if (>= % increments)
-                                                        (do
-                                                          (.log js/console state)
-                                                          (js/clearInterval (::interval state))
-                                                          increments)
-                                                        (inc %))))
-                                   interval  (js/setInterval callback 1000)
-                                   ]
-                               (assoc state ::interval interval)
-                             )
-                             )
-                :transfer-state (fn [old-state state]
-                                  (merge state (select-keys old-state [::interval])))
-                :will-unmount (fn [state]
-                                (let [[sector1 sector2 index] (:rum/args state)]
-                                  (js/clearInterval (::interval state))
-                                  state))
-                })
-
-
-; TODO! merge in dragger here so it's not in drag-core state?
 (rum/defc drag-line < rum/reactive []
   [:line (merge  {:style {:cursor "pointer"
                           :pointer-events "none"}}
@@ -190,13 +142,10 @@
   "count step-length forward around circle of size n given a step start and end"
   (mod (- end start) n))
 
-(defn lines-to-draw [n start end]
-  (let [step-len (step-length n start end)
-        steps (/ n (gcd n step-len))
-        indices (range steps)]
-    (map #(let [a (mod (+ start (* % step-len)) n)
-                b (mod (+ a step-len) n)]
-            [a b]) indices)))
+(defn lines-to-draw [n start step-len steps]
+  (map #(let [a (mod (+ start (* % step-len)) n)
+              b (mod (+ a step-len) n)]
+          [a b]) (range steps)))
 
 (rum/defc chord [sector1 sector2 index t]
   (let [theta1 (i->theta (:stars-n @core/model) sector1)
@@ -218,16 +167,19 @@
 (rum/defc chords [m dc]
 
   (let [n (:stars-n m)
-        t (* n (:t m))
         start (:start dc)
         end (:end dc)
-        step-len (step-length n start end)]
+        step-len (step-length n start end)
+        steps (/ n (gcd n step-len))
+        t (* steps (:t m))
+        ]
     [:g
      (map-indexed
       #(let [[start end] %2]
         (prn [start end])
         (chord start end % (ramp % 1 t)))
-      (lines-to-draw n start end))
+      (lines-to-draw n start step-len steps)
+      )
      ]))
 
 (rum/defc star [m dc]
