@@ -177,23 +177,6 @@
                 })
 
 
-(rum/defc chord [sector1 sector2 index t]
-  (let [theta1 (i->theta (:stars-n @core/model) sector1)
-        theta2 (i->theta (:stars-n @core/model) sector2)
-        x1 (dot-coord :x theta1)
-        y1 (dot-coord :y theta1)
-        x2 (dot-coord :x theta2)
-        y2 (dot-coord :y theta2)]
-    [:line {:x1 x1
-            :y1 y1
-            :x2 (+ (* x1 (- 1 t)) (* x2 t))
-            :y2 (+ (* y1 (- 1 t)) (* y2 t))
-            :stroke-linecap "round"
-            :stroke "rgba(0,128,128,1)" ;"#08f"
-            :stroke-width 10
-            :marker-end "none" ;(if (< t 1) "url(#arrow)" "none")
-            }]))
-
 ; TODO! merge in dragger here so it's not in drag-core state?
 (rum/defc drag-line < rum/reactive []
   [:line (merge  {:style {:cursor "pointer"
@@ -215,18 +198,27 @@
                 b (mod (+ a step-len) n)]
             [a b]) indices)))
 
-(defn visit []
-  (let [m @core/model
-        dc @core/drag-chord
-        n (:stars-n m)
-        start (:start dc)
-        end (:end dc)
-        ]
-    (lines-to-draw n start end)))
+(rum/defc chord [sector1 sector2 index t]
+  (let [theta1 (i->theta (:stars-n @core/model) sector1)
+        theta2 (i->theta (:stars-n @core/model) sector2)
+        x1 (dot-coord :x theta1)
+        y1 (dot-coord :y theta1)
+        x2 (dot-coord :x theta2)
+        y2 (dot-coord :y theta2)]
+    (when (pos? t) [:line {:x1 x1
+                           :y1 y1
+                           :x2 (+ (* x1 (- 1 t)) (* x2 t))
+                           :y2 (+ (* y1 (- 1 t)) (* y2 t))
+                           :stroke-linecap "round"
+                           :stroke "rgba(0,128,128,1)" ;"#08f"
+                           :stroke-width 10
+                           :marker-end "none" ;(if (< t 1) "url(#arrow)" "none")
+                           }])))
 
 (rum/defc chords [m dc]
-  ;let [t (/ (second (:clock m)) 500)]
+
   (let [n (:stars-n m)
+        t (* n (:t m))
         start (:start dc)
         end (:end dc)
         step-len (step-length n start end)]
@@ -234,7 +226,7 @@
      (map-indexed
       #(let [[start end] %2]
         (prn [start end])
-         (chord start end % 1))
+        (chord start end % (ramp % 1 t)))
       (lines-to-draw n start end))
      ]))
 

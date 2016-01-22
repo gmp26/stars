@@ -7,7 +7,7 @@
 
 (defonce model
   (atom {:stars-n 8
-         ;:stars-t [0.1 0 0 0]
+         :t 0
          :dragging false}))
 
 (defonce drag-chord (atom {:spec nil   ; variable attributes of drag line
