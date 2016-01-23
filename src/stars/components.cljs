@@ -11,7 +11,7 @@
 ;;;
 (def min-nodes 1)
 (def max-nodes 40)
-(def stars-r 180)
+(def stars-r 170)
 (def stars-o {:x 200 :y 200})
 (def t-steps 100)
 (def pi (.-PI js/Math))
@@ -59,8 +59,8 @@
   (swap! core/model assoc :t 0)
   (go (while (< (:t @core/model) 1)
         (do
-          (<! (timeout 1))
-          (swap! core/model update :t #(+ % 0.001))))))
+          (<! (timeout 2))
+          (swap! core/model update :t #(+ % 0.003))))))
 ;;;
 ;; event handlers
 ;;;
@@ -84,11 +84,11 @@
 ;;;
 ;; component renders
 ;;;
-(rum/defc dot [theta]
+(rum/defc dot < rum/reactive [theta]
   (let [x (dot-coord :x theta)
         y (dot-coord :y theta)]
     [:circle {:style {:cursor "pointer"}
-              :stroke "#ffffff" :stroke-width 3 :fill "#CCCCCC" :r 12
+              :stroke "#ffffff" :stroke-width 3 :fill "#CCCCCC" :r (- 30 (/ (:stars-n (rum/react core/model)) 2.4))
               :cx x
               :cy y
               :on-mouse-down #(handle-start x y %)
