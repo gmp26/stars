@@ -4,31 +4,26 @@
      [rum.core :as rum]
      [stars.core :as core]
      [stars.events :as events]
-     [cljs.core.async :refer [chan <! >! put! timeout]]
-   ))
+     [cljs.core.async :refer [<! timeout]]))
 
 ;;;
 ;; constants
 ;;;
 (def min-nodes 1)
-(def max-nodes 16)
+(def max-nodes 40)
 (def stars-r 180)
 (def stars-o {:x 200 :y 200})
 (def t-steps 100)
 (def pi (.-PI js/Math))
 (def two-pi (* 2 pi))
 
-
 ;;;
 ;; utilities
 ;;;
-
 (defn mean [a b] (/ (+ a b) 2))
 
 (defn gcd [a b]
-  (if (zero? b)
-    a
-    (recur b (mod a b))))
+  (if (zero? b) a (recur b (mod a b))))
 
 (defn dot-coord [key theta]
   (+ (key stars-o) (* stars-r ((if (= key :x) Math.cos Math.sin) theta))))
@@ -44,10 +39,8 @@
 
 (defn xy->theta [x y]
   (let [angle (.atan2 js/Math (- y (:y stars-o)) (- x (:x stars-o)))]
-    (if (pos? angle) angle (+ two-pi angle)))
-  )
+    (if (pos? angle) angle (+ two-pi angle))))
 
-;; TODO
 (defn closest-sector [x y]
   (let [angle (xy->theta x y)
         n (:stars-n @core/model)]
@@ -56,44 +49,37 @@
               (if (> diff pi) (- two-pi diff) diff))
            (range n))))
 
-(defn closest-dot [x y]
-  (let [t (i->theta (:stars-n @core/model) (closest-sector x y))]
-    [(dot-coord :x t) (dot-coord :y t)]))
-
 (defn ramp [at width x]
   (let [a (+ at width)]
     (cond (< x at) 0
           (< x (+ at width)) (/ (- x at) width)
           :else 1)))
+
+(defn timed-draw []
+  (swap! core/model assoc :t 0)
+  (go (while (< (:t @core/model) 1)
+        (do
+          (<! (timeout 1))
+          (swap! core/model update :t #(+ % 0.001))))))
 ;;;
 ;; event handlers
 ;;;
 (defn handle-start [x y event]
-  (prn "dot start")
-  (swap! core/model assoc :dragging true)
+  (swap! core/model assoc :dragging true :t 0)
   (swap! core/drag-chord assoc
          :start (closest-sector x y)
          :spec (merge core/dragger {:x1 x :y1 y :x2 x :y2 y})))
 
 (defn handle-move [event]
   (when (:dragging @core/model)
-    (prn "move")
     (when-let [svg (core/el "svg-container")]
       (let [[x2 y2] (events/mouse->svg svg event)]
-        (swap! core/drag-chord #(assoc %
-                                       :spec (assoc (:spec %) :x2 x2 :y2 y2)
+        (swap! core/drag-chord #(assoc % :spec (assoc (:spec %) :x2 x2 :y2 y2)
                                        :end (closest-sector x2 y2)))))))
 
-(defn handle-dot-out [event]
-  (prn "dot-out"))
-
-(defn handle-out [event]
-  (prn "out"))
-
 (defn handle-end [event]
-  (prn "end")
   (swap! core/model assoc :dragging false)
-  )
+  (timed-draw))
 
 ;;;
 ;; component renders
@@ -102,14 +88,13 @@
   (let [x (dot-coord :x theta)
         y (dot-coord :y theta)]
     [:circle {:style {:cursor "pointer"}
-              :stroke "#ffffff" :stroke-width 3 :fill "#CCCCCC" :r 20
+              :stroke "#ffffff" :stroke-width 3 :fill "#CCCCCC" :r 12
               :cx x
               :cy y
               :on-mouse-down #(handle-start x y %)
               :on-touch-start #(handle-start x y %)
               :on-mouse-move handle-move
               :on-touch-move handle-move
-              :on-mouse-out handle-out
               :on-mouse-up handle-end
               :on-touch-end handle-end
               }]))
@@ -133,70 +118,14 @@
 (rum/defc dots-on-circle [stars-n]
   [:g  (map-indexed  #(rum/with-key (dot %2) %1) (thetas stars-n))])
 
-(def increments 10)
-
-(defn slow-local
-  "Adds an atom to component’s state that can be used as local state.
-   Atom is stored under key `:rum/local`.
-   Component will be automatically re-rendered if atom’s value changes"
-  [initial & [key]]
-  (let [key (or key :rum/local)]
-    { :transfer-state
-     (fn [old-state state]
-       (merge state (select-keys old-state [key ::interval])))
-      :will-mount
-      (fn [state]
-        (let [local-state (atom initial)
-              component   (:rum/react-component state)]
-          (add-watch local-state key
-            (fn [_ _ _ _]
-              (rum/request-render component)))
-          (assoc state key local-state))) }))
-
-
-(def slow-draw {:did-mount (fn [state]
-                             (let [[sector1 sector2 index] (:rum/args state)
-                                   comp      (:rum/react-component state)
-                                   callback (fn [event]
-                                              (.log js/console @(:rum/local state))
-                                              (swap! (:rum/local state)
-                                                     #(if (>= % increments)
-                                                        (do
-                                                          (.log js/console state)
-                                                          (js/clearInterval (::interval state))
-                                                          increments)
-                                                        (inc %))))
-                                   interval  (js/setInterval callback 1000)
-                                   ]
-                               (assoc state ::interval interval)
-                             )
-                             )
-                :transfer-state (fn [old-state state]
-                                  (merge state (select-keys old-state [::interval])))
-                :will-unmount (fn [state]
-                                (let [[sector1 sector2 index] (:rum/args state)]
-                                  (js/clearInterval (::interval state))
-                                  state))
-                })
-
-
-; TODO! merge in dragger here so it's not in drag-core state?
 (rum/defc drag-line < rum/reactive []
   [:line (merge  {:style {:cursor "pointer"
                           :pointer-events "none"}}
                  (:spec (rum/react core/drag-chord)))])
 
-
 (defn step-length [n start end]
   "count step-length forward around circle of size n given a step start and end"
   (mod (- end start) n))
-
-(defn continue-draw []
-  (swap! core/model assoc :t 0)
-  (go (while (< (:t @core/model) 1)
-        (do
-          (<! (timeout 5))
-          (swap! core/model update :t #(+ % 0.001))))))
 
 (defn lines-to-draw [n start steps step-len]
   (map #(let [a (mod (+ start (* % step-len)) n)
@@ -215,8 +144,8 @@
                            :x2 (+ (* x1 (- 1 t)) (* x2 t))
                            :y2 (+ (* y1 (- 1 t)) (* y2 t))
                            :stroke-linecap "round"
-                           :stroke "rgba(0,128,128,1)" ;"#08f"
-                           :stroke-width 10
+                           :stroke "rgba(0,128,128,0.5)" ;"#08f"
+                           :stroke-width 5
                            :marker-end "none" ;(if (< t 1) "url(#arrow)" "none")
                            }])))
 
@@ -226,8 +155,7 @@
         end (:end dc)
         step-len (step-length n start end)
         steps (/ n (gcd n step-len))
-        t (* steps (:t m))
-        ]
+        t (* steps (:t m))]
     [:g
      (map-indexed
       #(let [[start end] %2]
@@ -248,7 +176,7 @@
                :view-box "-0.5 -0.5 1 1"}
       [:circle {:cx 0 :cy 0 :r 0.3 :fill "black"}]]]
     [:g
-     [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
+     #_[:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
      (dots-on-circle (:stars-n m))
      (if (:dragging m) (drag-line) (chords m dc))]]])
 
@@ -256,5 +184,4 @@
   [:div {:style {:max-width "600px"}}
    (count-input)
    [:div {:style {:clear "both"}}
-    (star (rum/react core/model) (rum/react core/drag-chord))
-    [:p (str (rum/react core/model))]]])
+    (star (rum/react core/model) (rum/react core/drag-chord))]])
