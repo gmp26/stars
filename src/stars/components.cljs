@@ -1,8 +1,10 @@
 (ns ^:figwheel-always stars.components
-  (:require
-   [rum.core :as rum]
-   [stars.core :as core]
-   [stars.events :as events]
+    (:require-macros [cljs.core.async.macros :refer [go]])
+    (:require
+     [rum.core :as rum]
+     [stars.core :as core]
+     [stars.events :as events]
+     [cljs.core.async :refer [chan <! >! put! timeout]]
    ))
 
 ;;;
@@ -15,6 +17,7 @@
 (def t-steps 100)
 (def pi (.-PI js/Math))
 (def two-pi (* 2 pi))
+
 
 ;;;
 ;; utilities
@@ -183,12 +186,17 @@
                           :pointer-events "none"}}
                  (:spec (rum/react core/drag-chord)))])
 
-#_(defn step [m dc]
-  (mod (- (:end dc) (:start dc)) (:stars-n m)))
 
 (defn step-length [n start end]
   "count step-length forward around circle of size n given a step start and end"
   (mod (- end start) n))
+
+(defn continue-draw []
+  (swap! core/model assoc :t 0)
+  (go (while (< (:t @core/model) 1)
+        (do
+          (<! (timeout 5))
+          (swap! core/model update :t #(+ % 0.001))))))
 
 (defn lines-to-draw [n start steps step-len]
   (map #(let [a (mod (+ start (* % step-len)) n)
@@ -213,7 +221,6 @@
                            }])))
 
 (rum/defc chords [m dc]
-
   (let [n (:stars-n m)
         start (:start dc)
         end (:end dc)
@@ -224,10 +231,8 @@
     [:g
      (map-indexed
       #(let [[start end] %2]
-        (prn [start end])
         (chord start end % (ramp % 1 t)))
-      (lines-to-draw n start steps step-len))
-     ]))
+      (lines-to-draw n start steps step-len))]))
 
 (rum/defc star [m dc]
   [:div {:style {:padding "2%" :display "inline-block" :width "96%"}}
@@ -240,20 +245,16 @@
           }
     [:defs
      [:marker {:id "arrow"
-               :view-box "-0.5 -0.5 1 1"
-               }
+               :view-box "-0.5 -0.5 1 1"}
       [:circle {:cx 0 :cy 0 :r 0.3 :fill "black"}]]]
     [:g
      [:circle.outlined {:fill "none" :stroke "black" :stroke-width 2 :cx 200 :cy 200 :r stars-r}]
      (dots-on-circle (:stars-n m))
-     (if (:dragging m) (drag-line) (chords m dc)
-         )
-     ]]])
+     (if (:dragging m) (drag-line) (chords m dc))]]])
 
 (rum/defc stars < rum/reactive []
   [:div {:style {:max-width "600px"}}
    (count-input)
    [:div {:style {:clear "both"}}
     (star (rum/react core/model) (rum/react core/drag-chord))
-    [:p (str (rum/react core/drag-chord))]
     [:p (str (rum/react core/model))]]])
