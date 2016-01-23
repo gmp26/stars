@@ -190,13 +190,10 @@
   "count step-length forward around circle of size n given a step start and end"
   (mod (- end start) n))
 
-(defn lines-to-draw [n start end]
-  (let [step-len (step-length n start end)
-        steps (/ n (gcd n step-len))
-        indices (range steps)]
-    (map #(let [a (mod (+ start (* % step-len)) n)
-                b (mod (+ a step-len) n)]
-            [a b]) indices)))
+(defn lines-to-draw [n start steps step-len]
+  (map #(let [a (mod (+ start (* % step-len)) n)
+              b (mod (+ a step-len) n)]
+          [a b]) (range steps)))
 
 (rum/defc chord [sector1 sector2 index t]
   (let [theta1 (i->theta (:stars-n @core/model) sector1)
@@ -218,16 +215,18 @@
 (rum/defc chords [m dc]
 
   (let [n (:stars-n m)
-        t (* n (:t m))
         start (:start dc)
         end (:end dc)
-        step-len (step-length n start end)]
+        step-len (step-length n start end)
+        steps (/ n (gcd n step-len))
+        t (* steps (:t m))
+        ]
     [:g
      (map-indexed
       #(let [[start end] %2]
         (prn [start end])
         (chord start end % (ramp % 1 t)))
-      (lines-to-draw n start end))
+      (lines-to-draw n start steps step-len))
      ]))
 
 (rum/defc star [m dc]
