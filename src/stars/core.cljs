@@ -17,7 +17,7 @@
 (def dragger {:id "drag-line"
               :opacity 0.5
               :stroke "rgba(0, 128, 128, 1)"
-              :stroke-width 10
+              :stroke-width 5
               :stroke-linecap "round"})
 
 (defn el [id] (js/document.getElementById id))
